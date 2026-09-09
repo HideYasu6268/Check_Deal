@@ -1,0 +1,5 @@
+.venv/
+*.pdf
+gemini_api_key.txt
+補助一覧.txt
+__pycache__/
