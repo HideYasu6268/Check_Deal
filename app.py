@@ -32,6 +32,13 @@ class App(ctk.CTk):
         self.pdf_entry.pack(side="left", fill="x", expand=True, padx=4)
         ctk.CTkButton(pdf_frame, text="参照", width=70, command=self.browse_pdf).pack(side="left", padx=(4, 8))
 
+        # 買掛金(負債)用のPDFかどうか。異常値の判定ロジックは売掛と共通のまま、
+        # Geminiへの説明プロンプトの文言（売掛金/買掛金）だけ切り替える。
+        self.is_payable_var = tk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            pdf_frame, text="買掛金(負債)処理", variable=self.is_payable_var
+        ).pack(side="left", padx=(4, 8))
+
         # --- タブ ---
         self.tabview = ctk.CTkTabview(self)
         self.tabview.pack(fill="both", expand=True, padx=12, pady=(0, 12))
@@ -51,6 +58,9 @@ class App(ctk.CTk):
         )
         if path:
             self.pdf_path_var.set(path)
+
+    def current_mode(self):
+        return "payable" if self.is_payable_var.get() else "receivable"
 
     # ------------------------------------------------------------------
     # 自動（API）タブ
@@ -103,7 +113,16 @@ class App(ctk.CTk):
             def progress(msg):
                 self.after(0, self.append_output, msg)
 
-            explanation = gemini_explain.explain_anomalies(anomaly_df, on_progress=progress)
+            mode = self.current_mode()
+            try:
+                explanation = gemini_explain.explain_anomalies(
+                    anomaly_df, mode=mode, on_progress=progress
+                )
+            except Exception as e:
+                self.after(0, self.append_output, f"Geminiへの問い合わせに失敗しました: {e}")
+                self.after(0, self.append_output, "手動（コピペ）タブに切り替えます。")
+                self.after(0, self.switch_to_manual_tab_with_prompt, anomaly_df, mode)
+                return
 
             replaced = fuzoku_mapping.apply_company_names(explanation, mapping)
 
@@ -116,6 +135,13 @@ class App(ctk.CTk):
         finally:
             self.after(0, self.set_status, "完了")
             self.after(0, lambda: self.run_button.configure(state="normal"))
+
+    def switch_to_manual_tab_with_prompt(self, anomaly_df, mode):
+        prompt = gemini_explain.build_batch_prompt(anomaly_df, mode=mode)
+        self.manual_prompt_box.delete("1.0", "end")
+        self.manual_prompt_box.insert("1.0", prompt)
+        self.set_manual_status("レート制限等でAPI処理が失敗しました。プロンプトを引き継ぎました。コピーしてチャットに貼り付けてください")
+        self.tabview.set("手動（コピペ）")
 
     # ------------------------------------------------------------------
     # 手動（コピペ）タブ
@@ -172,7 +198,7 @@ class App(ctk.CTk):
                 self.set_manual_status(f"抽出{len(df)}行 / 異常0件")
                 return
 
-            prompt = gemini_explain.build_batch_prompt(anomaly_df)
+            prompt = gemini_explain.build_batch_prompt(anomaly_df, mode=self.current_mode())
             self.manual_prompt_box.insert("1.0", prompt)
             self.set_manual_status(f"抽出{len(df)}行 / 異常{len(details)}件のプロンプトを生成しました")
         except Exception as e:

@@ -49,7 +49,8 @@ def extract_dataframe(pdf_path):
                 for row in rows[2:]:  # 先頭2行はヘッダー
                     date_raw, code_col, name_col, _tax1, desc, _tax2, dr, cr, bal = row
 
-                    date_raw = (date_raw or "").strip()
+                    # 日付欄には「仕訳番号」等が改行付きで続くフォーマットがあるため、1行目だけを日付とみなす
+                    date_raw = (date_raw or "").split("\n")[0].strip()
                     desc_first = (desc or "").split("\n")[0].strip()
                     desc_first_nospace = desc_first.replace(" ", "").replace("　", "")
 
@@ -118,7 +119,8 @@ def judge_group(g):
     正常とみなす条件:
       1. 最終レコードの残高が0
       2. 残高が、直近のプラスの売上額(1件)と一致
-      3. 残高が、直近のプラスの売上額を2件・3件合計した額のいずれかと一致
+      3. 残高が、直近のプラスの売上額を2件合計した額と一致
+    （3ヵ月以上の未収・未払は異常とみなすため、2件合計までしか許容しない）
     上記いずれにも当てはまらない場合は異常とする。
     """
     g = g.sort_values("日付").reset_index(drop=True)
@@ -135,7 +137,7 @@ def judge_group(g):
 
     running = 0
     candidates = []
-    for v in reversed(pos_amounts[-3:]):
+    for v in reversed(pos_amounts[-2:]):
         running += v
         candidates.append(running)
 
@@ -146,7 +148,6 @@ def judge_group(g):
         "残高": residual,
         "直近プラス売上1件": candidates[0] if len(candidates) >= 1 else None,
         "直近プラス売上2件合計": candidates[1] if len(candidates) >= 2 else None,
-        "直近プラス売上3件合計": candidates[2] if len(candidates) >= 2 else None,
     }
 
 

@@ -7,8 +7,10 @@ import paths
 
 API_KEY_FILE = paths.path("gemini_api_key.txt")
 ANOMALY_CSV = paths.path("異常値.csv")
-PROMPT_BATCH_FILE = paths.path("gemini_prompt_batch.txt")
-PROMPT_SINGLE_FILE = paths.path("gemini_prompt_single.txt")
+PROMPT_BATCH_FILES = {
+    "receivable": paths.path("gemini_prompt_batch.txt"),
+    "payable": paths.path("gemini_prompt_batch_payable.txt"),
+}
 MODEL = "gemini-flash-latest"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 
@@ -33,17 +35,10 @@ def load_template(path):
         return f.read()
 
 
-def build_prompt(code, g):
-    table_cols = ["日付", "相手科目コード/科目", "金額", "残高"]
-    table_str = g[table_cols].to_string(index=False)
-    template = load_template(PROMPT_SINGLE_FILE)
-    return template.format(code=code, table=table_str)
-
-
-def build_batch_prompt(df):
+def build_batch_prompt(df, mode="receivable"):
     table_cols = ["日付", "補助コード", "相手科目コード/科目", "金額", "残高"]
     table_str = df[table_cols].to_string(index=False)
-    template = load_template(PROMPT_BATCH_FILE)
+    template = load_template(PROMPT_BATCH_FILES[mode])
     return template.format(table=table_str)
 
 
@@ -88,25 +83,11 @@ def call_gemini(api_keys, prompt, max_retries_per_key=3, on_progress=None):
     last_resp.raise_for_status()
 
 
-def explain_per_code(api_keys, df, on_progress=None):
-    """補助コードごとに個別にAPIを呼び出すフォールバック方式。
-    一括方式と見た目を揃えるため "## 補助コード XXXX" 形式のテキストにまとめて返す。
-    """
-    sections = []
-    for code, g in df.groupby("補助コード", sort=False):
-        prompt = build_prompt(code, g)
-        explanation = call_gemini(api_keys, prompt, on_progress=on_progress)
-        sections.append(f"## 補助コード {code}\n{explanation}")
-        if on_progress:
-            on_progress(f"補助コード {code} 完了")
-
-    return "\n\n".join(sections)
-
-
-def explain_anomalies(anomaly_df, api_keys=None, on_progress=None):
+def explain_anomalies(anomaly_df, api_keys=None, mode="receivable", on_progress=None):
     """異常値DataFrameをGeminiに渡し、説明テキストを返す。
-    まず全補助コードを1回のプロンプトにまとめる一括方式を試し、
-    失敗した場合は補助コードごとの個別方式にフォールバックする。
+    全補助コードを1回のプロンプトにまとめる一括方式のみ。失敗した場合は例外を投げる
+    （呼び出し側で手動タブへの切り替えを促す）。
+    mode: "receivable"(売掛金) または "payable"(買掛金) でプロンプトの文言を切り替える。
     """
     if anomaly_df.empty:
         return ""
@@ -114,14 +95,8 @@ def explain_anomalies(anomaly_df, api_keys=None, on_progress=None):
     if api_keys is None:
         api_keys = load_api_keys()
 
-    try:
-        prompt = build_batch_prompt(anomaly_df)
-        return call_gemini(api_keys, prompt, on_progress=on_progress)
-    except Exception as e:
-        if on_progress:
-            on_progress(f"一括方式で失敗しました: {e}")
-            on_progress("補助コードごとの個別方式にフォールバックします。")
-        return explain_per_code(api_keys, anomaly_df, on_progress=on_progress)
+    prompt = build_batch_prompt(anomaly_df, mode=mode)
+    return call_gemini(api_keys, prompt, on_progress=on_progress)
 
 
 def main():
