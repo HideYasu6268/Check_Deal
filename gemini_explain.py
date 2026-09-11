@@ -35,11 +35,15 @@ def load_template(path):
         return f.read()
 
 
-def build_batch_prompt(df, mode="receivable"):
+def build_batch_prompt(df, mode="receivable", for_api=False):
+    """for_api=True(API処理用)の場合のみ、1行あたりの文字数を指定する指示を追加する。
+    チャットへのコピペ用（デフォルト）はチャット側が自然に折り返すため不要。
+    """
     table_cols = ["日付", "補助コード", "相手科目コード/科目", "金額", "残高"]
     table_str = df[table_cols].to_string(index=False)
     template = load_template(PROMPT_BATCH_FILES[mode])
-    return template.format(table=table_str)
+    extra_instruction = "\n- 80文字前後の意味の区切りの良い箇所で改行を入れる事" if for_api else ""
+    return template.format(table=table_str, extra_instruction=extra_instruction)
 
 
 def call_gemini(api_keys, prompt, max_retries_per_key=3, on_progress=None):
@@ -95,7 +99,7 @@ def explain_anomalies(anomaly_df, api_keys=None, mode="receivable", on_progress=
     if api_keys is None:
         api_keys = load_api_keys()
 
-    prompt = build_batch_prompt(anomaly_df, mode=mode)
+    prompt = build_batch_prompt(anomaly_df, mode=mode, for_api=True)
     return call_gemini(api_keys, prompt, on_progress=on_progress)
 
 
@@ -108,9 +112,6 @@ def main():
 
     explanation = explain_anomalies(df, on_progress=print)
     print(explanation)
-    with open(paths.path("異常値_説明.txt"), "w", encoding="utf-8") as f:
-        f.write(explanation)
-    print("\n異常値_説明.txt に保存しました。")
 
 
 if __name__ == "__main__":

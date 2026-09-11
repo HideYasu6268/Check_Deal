@@ -174,7 +174,6 @@ def run(pdf_path=DEFAULT_PDF_PATH):
     df.to_csv(paths.path("総勘定元帳_抽出.csv"), index=False, encoding="utf-8-sig")
 
     anomaly_df, details = judge_anomalies(df)
-    anomaly_df.to_csv(paths.path("異常値.csv"), index=False, encoding="utf-8-sig")
 
     return df, anomaly_df, details, company_mapping
 

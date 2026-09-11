@@ -6,7 +6,6 @@ import customtkinter as ctk
 import extract_ledger
 import gemini_explain
 import fuzoku_mapping
-import paths
 
 ctk.set_appearance_mode("system")
 ctk.set_default_color_theme("blue")
@@ -126,9 +125,6 @@ class App(ctk.CTk):
 
             replaced = fuzoku_mapping.apply_company_names(explanation, mapping)
 
-            with open(paths.path("異常値_説明.txt"), "w", encoding="utf-8") as f:
-                f.write(replaced)
-
             self.after(0, self.append_output, "\n" + replaced)
         except Exception as e:
             self.after(0, self.append_output, f"エラー: {e}")
@@ -227,9 +223,7 @@ class App(ctk.CTk):
         replaced = fuzoku_mapping.apply_company_names(reply, self.mapping)
         self.manual_output_box.insert("1.0", replaced)
 
-        with open(paths.path("異常値_説明.txt"), "w", encoding="utf-8") as f:
-            f.write(replaced)
-        self.set_manual_status("会社名への置換が完了し、異常値_説明.txt に保存しました")
+        self.set_manual_status("会社名への置換が完了しました")
 
 
 if __name__ == "__main__":
