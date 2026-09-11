@@ -8,8 +8,8 @@ import paths
 API_KEY_FILE = paths.path("gemini_api_key.txt")
 ANOMALY_CSV = paths.path("異常値.csv")
 PROMPT_BATCH_FILES = {
-    "receivable": paths.path("gemini_prompt_batch.txt"),
-    "payable": paths.path("gemini_prompt_batch_payable.txt"),
+    "receivable": paths.resource_path("gemini_prompt_batch.txt"),
+    "payable": paths.resource_path("gemini_prompt_batch_payable.txt"),
 }
 MODEL = "gemini-flash-latest"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
