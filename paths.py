@@ -21,3 +21,13 @@ def resource_path(*parts):
     if getattr(sys, "frozen", False):
         return os.path.join(getattr(sys, "_MEIPASS", base_dir()), *parts)
     return os.path.join(base_dir(), *parts)
+
+
+def overridable_resource_path(*parts):
+    """exeと同じフォルダに同名ファイルがあればそちら(更新用の外部ファイル)を優先し、
+    無ければexe内部に埋め込まれた既定版(resource_path)にフォールバックする。
+    """
+    external = path(*parts)
+    if os.path.exists(external):
+        return external
+    return resource_path(*parts)

@@ -6,6 +6,7 @@ import customtkinter as ctk
 import extract_ledger
 import gemini_explain
 import fuzoku_mapping
+import paths
 
 ctk.set_appearance_mode("system")
 ctk.set_default_color_theme("blue")
@@ -45,14 +46,18 @@ class App(ctk.CTk):
             pdf_frame, text="買掛金(負債)処理", variable=self.is_payable_var
         ).pack(side="left", padx=(4, 8))
 
+        ctk.CTkButton(
+            pdf_frame, text="設定(APIキー/プロンプト)", width=170, command=self.open_settings
+        ).pack(side="left", padx=(4, 8))
+
         # --- タブ ---
         self.tabview = ctk.CTkTabview(self)
         self.tabview.pack(fill="both", expand=True, padx=12, pady=(0, 12))
-        self.tabview.add("自動（API）")
         self.tabview.add("手動（コピペ）")
+        self.tabview.add("自動（API）")
 
-        self._build_auto_tab(self.tabview.tab("自動（API）"))
         self._build_manual_tab(self.tabview.tab("手動（コピペ）"))
+        self._build_auto_tab(self.tabview.tab("自動（API）"))
 
     # ------------------------------------------------------------------
     # 共通
@@ -67,6 +72,9 @@ class App(ctk.CTk):
 
     def current_mode(self):
         return "payable" if self.is_payable_var.get() else "receivable"
+
+    def open_settings(self):
+        SettingsDialog(self)
 
     # ------------------------------------------------------------------
     # 自動（API）タブ
@@ -233,6 +241,56 @@ class App(ctk.CTk):
         self.manual_output_box.insert("1.0", replaced)
 
         self.set_manual_status("会社名への置換が完了しました")
+
+
+class SettingsDialog(ctk.CTkToplevel):
+    """APIキー・プロンプトテンプレートをGUIから編集するダイアログ。
+    保存すると exe と同じフォルダに外部ファイルとして書き出され、
+    以後は exe埋め込みの既定値より優先して使われる(paths.overridable_resource_path)。
+    """
+
+    FILES = {
+        "gemini_api_key.txt": "APIキー(1行1キー)",
+        "gemini_prompt_batch.txt": "プロンプト(売掛金)",
+        "gemini_prompt_batch_payable.txt": "プロンプト(買掛金)",
+    }
+
+    def __init__(self, master):
+        super().__init__(master)
+        self.title("設定(APIキー/プロンプト)")
+        self.geometry("700x600")
+        self.transient(master)
+
+        self.boxes = {}
+        tabview = ctk.CTkTabview(self)
+        tabview.pack(fill="both", expand=True, padx=8, pady=8)
+
+        for filename, label in self.FILES.items():
+            tab = tabview.add(label)
+            box = ctk.CTkTextbox(tab)
+            box.pack(fill="both", expand=True, padx=4, pady=(4, 4))
+            try:
+                with open(paths.overridable_resource_path(filename), encoding="utf-8") as f:
+                    box.insert("1.0", f.read())
+            except OSError:
+                pass
+            self.boxes[filename] = box
+
+            bottom = ctk.CTkFrame(tab, fg_color="transparent")
+            bottom.pack(fill="x", padx=4, pady=(0, 4))
+            status = ctk.CTkLabel(bottom, text="")
+            status.pack(side="left")
+            ctk.CTkButton(
+                bottom, text="保存", width=80,
+                command=lambda fn=filename, st=status: self.save(fn, st),
+            ).pack(side="right")
+
+    def save(self, filename, status_label):
+        content = self.boxes[filename].get("1.0", "end").rstrip("\n") + "\n"
+        target = paths.path(filename)
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(content)
+        status_label.configure(text=f"保存しました: {target}")
 
 
 if __name__ == "__main__":

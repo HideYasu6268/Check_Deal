@@ -5,12 +5,12 @@ import requests
 
 import paths
 
-API_KEY_FILE = paths.path("gemini_api_key.txt")
 ANOMALY_CSV = paths.path("異常値.csv")
-PROMPT_BATCH_FILES = {
-    "receivable": paths.resource_path("gemini_prompt_batch.txt"),
-    "payable": paths.resource_path("gemini_prompt_batch_payable.txt"),
+PROMPT_BATCH_FILENAMES = {
+    "receivable": "gemini_prompt_batch.txt",
+    "payable": "gemini_prompt_batch_payable.txt",
 }
+API_KEY_FILENAME = "gemini_api_key.txt"
 MODEL = "gemini-flash-latest"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 
@@ -18,15 +18,17 @@ ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:gen
 def load_api_keys():
     """gemini_api_key.txt から1行1キーでAPIキーの一覧を読み込む。
     複数書いておくと、無料枠を使い切ったキーは自動でスキップして次のキーに切り替わる。
+    exeと同じフォルダに同名ファイルを置けば、exe埋め込みの既定キーより優先される。
     """
+    api_key_file = paths.overridable_resource_path(API_KEY_FILENAME)
     keys = []
-    with open(API_KEY_FILE, encoding="utf-8") as f:
+    with open(api_key_file, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:
                 keys.append(line)
     if not keys:
-        raise RuntimeError(f"{API_KEY_FILE} にAPIキーが見つかりません")
+        raise RuntimeError(f"{api_key_file} にAPIキーが見つかりません")
     return keys
 
 
@@ -41,7 +43,8 @@ def build_batch_prompt(df, mode="receivable", for_api=False):
     """
     table_cols = ["日付", "補助コード", "相手科目コード/科目", "金額", "残高"]
     table_str = df[table_cols].to_string(index=False)
-    template = load_template(PROMPT_BATCH_FILES[mode])
+    prompt_file = paths.overridable_resource_path(PROMPT_BATCH_FILENAMES[mode])
+    template = load_template(prompt_file)
     extra_instruction = "\n- 80文字前後の意味の区切りの良い箇所で改行を入れる事" if for_api else ""
     return template.format(table=table_str, extra_instruction=extra_instruction)
 
