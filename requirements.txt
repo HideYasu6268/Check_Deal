@@ -1,0 +1,5 @@
+customtkinter==6.0.0
+pdfplumber==0.11.10
+pandas==3.0.5
+requests==2.34.2
+pyinstaller==6.22.2

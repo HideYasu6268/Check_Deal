@@ -31,6 +31,13 @@ class App(ctk.CTk):
         self.pdf_entry.pack(side="left", fill="x", expand=True, padx=4)
         ctk.CTkButton(pdf_frame, text="参照", width=70, command=self.browse_pdf).pack(side="left", padx=(4, 8))
 
+        ctk.CTkLabel(pdf_frame, text="ページ範囲:").pack(side="left", padx=(8, 4))
+        self.page_range_var = tk.StringVar(value="")
+        self.page_range_entry = ctk.CTkEntry(
+            pdf_frame, textvariable=self.page_range_var, width=120, placeholder_text="例: 1-10,15"
+        )
+        self.page_range_entry.pack(side="left", padx=(0, 8))
+
         # 買掛金(負債)用のPDFかどうか。異常値の判定ロジックは売掛と共通のまま、
         # Geminiへの説明プロンプトの文言（売掛金/買掛金）だけ切り替える。
         self.is_payable_var = tk.BooleanVar(value=False)
@@ -95,9 +102,10 @@ class App(ctk.CTk):
     def _run_pipeline_worker(self):
         try:
             pdf_path = self.pdf_path_var.get()
+            page_range = self.page_range_var.get()
 
             self.after(0, self.set_status, "PDFを解析中...")
-            df, anomaly_df, details, mapping = extract_ledger.run(pdf_path)
+            df, anomaly_df, details, mapping = extract_ledger.run(pdf_path, page_range=page_range)
             self.anomaly_df = anomaly_df
             self.mapping = mapping
 
@@ -180,10 +188,11 @@ class App(ctk.CTk):
     def generate_manual_prompt(self):
         try:
             pdf_path = self.pdf_path_var.get()
+            page_range = self.page_range_var.get()
             self.set_manual_status("PDFを解析中...")
             self.update_idletasks()
 
-            df, anomaly_df, details, mapping = extract_ledger.run(pdf_path)
+            df, anomaly_df, details, mapping = extract_ledger.run(pdf_path, page_range=page_range)
             self.anomaly_df = anomaly_df
             self.mapping = mapping
 

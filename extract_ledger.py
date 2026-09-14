@@ -23,9 +23,33 @@ def first_line(s):
     return s.split("\n")[0].strip().replace(" ", "")
 
 
-def extract_dataframe(pdf_path):
+def parse_page_range(spec, num_pages):
+    """"1-10,15,20-25" 形式の文字列を0-basedのページindexリストに変換する。
+    空文字/Noneなら None（全ページ対象）を返す。
+    """
+    if not spec or not spec.strip():
+        return None
+
+    pages = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start_s, end_s = part.split("-", 1)
+            start, end = int(start_s), int(end_s)
+            for p in range(start, end + 1):
+                pages.add(p)
+        else:
+            pages.add(int(part))
+
+    return sorted(p - 1 for p in pages if 1 <= p <= num_pages)
+
+
+def extract_dataframe(pdf_path, page_range=None):
     """総勘定元帳(補助元帳)PDFを読み込み、明細のDataFrameと
     補助コード→会社名(補助科目名)のマッピングを返す。
+    page_range: "1-10,15" 形式のページ指定文字列。Noneまたは空文字なら全ページ処理する。
     """
     records = []
     sub_code = None
@@ -33,8 +57,20 @@ def extract_dataframe(pdf_path):
     fiscal_start_year = None
     company_mapping = {}
 
-    with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
+    try:
+        pdf_ctx = pdfplumber.open(pdf_path)
+    except PermissionError as e:
+        raise RuntimeError(
+            f"PDFファイルを開けませんでした。他のソフト(PDFビューア等)で開いている場合は閉じてから再試行してください。\n{pdf_path}"
+        ) from e
+
+    with pdf_ctx as pdf:
+        pages = pdf.pages
+        indices = parse_page_range(page_range, len(pages))
+        if indices is not None:
+            pages = [pages[i] for i in indices]
+
+        for page in pages:
             text = page.extract_text() or ""
 
             # ヘッダーから補助コード・補助名を取得（会社名に空白が入る場合があるため "PAGE" の手前までを名前とみなす）
@@ -73,6 +109,12 @@ def extract_dataframe(pdf_path):
                     if desc_first_nospace == "繰越残高":
                         # ページまたぎの重複表示（前ページ末残高の繰り返し）なので行としては採用しない
                         continue
+
+                    if fiscal_start_year is None:
+                        raise RuntimeError(
+                            "会計年度(開始年)を検出できませんでした。"
+                            "ページ範囲に「前期繰越」が含まれるページ(通常は各補助コードの先頭ページ)を含めてください。"
+                        )
 
                     year = fiscal_start_year if month >= 10 else fiscal_start_year + 1
 
@@ -169,8 +211,8 @@ def judge_anomalies(df):
     return anomaly_df, details
 
 
-def run(pdf_path=DEFAULT_PDF_PATH):
-    df, company_mapping = extract_dataframe(pdf_path)
+def run(pdf_path=DEFAULT_PDF_PATH, page_range=None):
+    df, company_mapping = extract_dataframe(pdf_path, page_range=page_range)
     df.to_csv(paths.path("総勘定元帳_抽出.csv"), index=False, encoding="utf-8-sig")
 
     anomaly_df, details = judge_anomalies(df)
